@@ -67,3 +67,28 @@ export type Activity = {
 export type ActivityWithApp = Activity & {
   applications: { company: string; role: string } | null;
 };
+
+// What application forms keep asking for. Stored in the user's Appwrite prefs
+// and sent to the local helper when auto-filling a form.
+export const PROFILE_KEYS = [
+  "first_name",
+  "last_name",
+  "email",
+  "phone",
+  "location",
+  "linkedin",
+  "github",
+  "portfolio",
+  "current_company",
+  "current_title",
+  "years_experience",
+  "notice_period",
+  "salary_expectation",
+  "work_authorization",
+  "needs_sponsorship",
+  "willing_to_relocate",
+  "heard_from",
+  "languages",
+  "extra",
+] as const;
+export type Profile = Record<(typeof PROFILE_KEYS)[number], string>;

@@ -15,7 +15,7 @@ import {
   createAdminClient,
   createSessionClient,
 } from "@/lib/appwrite";
-import { STATUSES, STATUS_META, WORK_MODES, type AiMatch, type Status } from "@/lib/types";
+import { PROFILE_KEYS, STATUSES, STATUS_META, WORK_MODES, type AiMatch, type Profile, type Status } from "@/lib/types";
 
 async function authed() {
   const session = await createSessionClient();
@@ -230,6 +230,51 @@ export async function saveCoverLetter(id: string, text: string): Promise<ActionR
       rowId: id,
       data: { cover_letter: text.slice(0, 20000) },
     });
+    refreshAll(id);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: errorMessage(e) };
+  }
+}
+
+// ---- profile & auto-fill ---------------------------------------------------
+
+const profileSchema = z.object(
+  Object.fromEntries(PROFILE_KEYS.map((k) => [k, z.string().trim().max(k === "extra" ? 2000 : 300).default("")])) as Record<
+    (typeof PROFILE_KEYS)[number],
+    z.ZodDefault<z.ZodString>
+  >,
+);
+
+export async function saveProfile(input: Partial<Profile>): Promise<ActionResult> {
+  const parsed = profileSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: firstError(parsed.error) };
+  if (parsed.data.email && !z.email().safeParse(parsed.data.email).success) return { ok: false, error: "That email doesn't look right" };
+  const s = await authed();
+  try {
+    const prefs = await s.account.getPrefs();
+    await s.account.updatePrefs({ prefs: { ...prefs, profile: parsed.data } });
+    revalidatePath("/settings");
+    revalidatePath("/applications/[id]", "page");
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: errorMessage(e) };
+  }
+}
+
+const ATS_NAMES: Record<string, string> = { greenhouse: "Greenhouse", lever: "Lever", ashby: "Ashby" };
+
+// Called once the helper sees the confirmation page after the user submitted.
+export async function markAutoApplied(id: string, ats: string, resumeId: string): Promise<ActionResult> {
+  const s = await authed();
+  try {
+    const before = await s.tables.getRow({ databaseId: DB_ID, tableId: TABLES.applications, rowId: id });
+    // Record which resume went out (only one of the user's own).
+    const resume = await s.tables.getRow({ databaseId: DB_ID, tableId: TABLES.resumes, rowId: resumeId }).catch(() => null);
+    const extra = resume ? { resume_id: resume.$id } : {};
+    if (before.status === "wishlist") await applyStatusChange(s, id, "wishlist", "applied", extra);
+    else if (resume) await s.tables.updateRow({ databaseId: DB_ID, tableId: TABLES.applications, rowId: id, data: extra });
+    await logActivity(s, id, "applied", `Submitted the application${ATS_NAMES[ats] ? ` on ${ATS_NAMES[ats]}` : ""} (auto-filled)`);
     refreshAll(id);
     return { ok: true };
   } catch (e) {

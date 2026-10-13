@@ -331,6 +331,7 @@ const KIND_COLOR: Record<string, string> = {
   created: "bg-primary",
   status: "bg-sky-400",
   ai: "bg-violet-400",
+  applied: "bg-amber-500",
   note: "bg-zinc-400",
 };
 

@@ -2,64 +2,23 @@
 // Jobtrail AI helper: a tiny local server that turns requests from the Jobtrail
 // web app into `agy -p` (Antigravity CLI) calls with a JSON schema, so the app
 // gets structured answers without any API key. Listens on 127.0.0.1 only and
-// answers only the origins in JOBTRAIL_ORIGINS.
+// answers only the origins in JOBTRAIL_ORIGINS. It also drives the browser for
+// auto-filling application forms (apply.mjs).
 
-import { execFile } from "node:child_process";
-import { mkdtempSync, rmSync } from "node:fs";
 import { createServer } from "node:http";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { MODEL, agyBusy, runAgy } from "./agy.mjs";
+import { createApplier } from "./apply.mjs";
 
 const PORT = Number(process.env.JOBTRAIL_HELPER_PORT || 4777);
-const AGY = process.env.AGY_BIN || `${process.env.HOME}/.local/bin/agy`;
-const MODEL = process.env.AGY_MODEL || "";
 const ORIGINS = new Set(
   (process.env.JOBTRAIL_ORIGINS || "http://localhost:3000")
     .split(",")
     .map((s) => s.trim())
     .filter(Boolean),
 );
-const VERSION = "1.0.0";
+const VERSION = "1.1.0";
 const MAX_BODY = 400_000;
-
-// ---------------------------------------------------------------------------
-// agy runner
-
-let busy = 0;
-
-function runAgy(prompt, schema, { effort = "low", timeoutMs = 150_000 } = {}) {
-  // Empty scratch workspace so the agent has nothing to poke at.
-  const cwd = mkdtempSync(join(tmpdir(), "jobtrail-agy-"));
-  const args = [
-    "-p", prompt,
-    "--output-format", "json",
-    "--json-schema", JSON.stringify(schema),
-    "--disable-slash-commands",
-    "--effort", effort,
-  ];
-  if (MODEL) args.push("--model", MODEL);
-  busy++;
-  return new Promise((resolve, reject) => {
-    execFile(AGY, args, { cwd, timeout: timeoutMs, maxBuffer: 8 * 1024 * 1024 }, (err, stdout, stderr) => {
-      busy--;
-      rmSync(cwd, { recursive: true, force: true });
-      if (err) {
-        reject(new Error(err.killed ? "Antigravity took too long" : (stderr || err.message).trim().slice(0, 500)));
-        return;
-      }
-      try {
-        const out = JSON.parse(stdout);
-        if (out.status !== "SUCCESS" || !out.structured_output) {
-          reject(new Error(`Antigravity returned ${out.status || "no result"}`));
-          return;
-        }
-        resolve(out.structured_output);
-      } catch {
-        reject(new Error("Couldn't parse Antigravity output"));
-      }
-    });
-  });
-}
+const MAX_APPLY_BODY = 8_000_000; // carries the resume PDF
 
 const clip = (s, n) => String(s ?? "").slice(0, n);
 
@@ -176,6 +135,13 @@ const tasks = {
   },
 };
 
+const applier = createApplier({
+  runAgy,
+  // For automated tests: no visible window, separate browser profile.
+  headless: process.env.JOBTRAIL_APPLY_HEADLESS === "1",
+  ...(process.env.JOBTRAIL_BROWSER_PROFILE ? { profileDir: process.env.JOBTRAIL_BROWSER_PROFILE } : {}),
+});
+
 // ---------------------------------------------------------------------------
 // http
 
@@ -209,16 +175,24 @@ const server = createServer((req, res) => {
   }
   const url = new URL(req.url, "http://localhost");
   if (req.method === "GET" && url.pathname === "/health") {
-    return send(res, 200, { ok: true, version: VERSION, busy, model: MODEL || "default" });
+    return send(res, 200, { ok: true, version: VERSION, busy: agyBusy(), model: MODEL || "default", apply: true });
   }
-  const task = req.method === "POST" && url.pathname.startsWith("/ai/") && tasks[url.pathname.slice(4)];
+  if (req.method === "GET" && url.pathname.startsWith("/apply/")) {
+    const run = applier.status(url.pathname.slice(7));
+    return run ? send(res, 200, { ok: true, result: run }) : send(res, 404, { error: "That auto-fill run has ended" });
+  }
+  const isApply = req.method === "POST" && url.pathname === "/apply";
+  const task = isApply
+    ? async (input) => applier.start(input)
+    : req.method === "POST" && url.pathname.startsWith("/ai/") && tasks[url.pathname.slice(4)];
   if (!task) return send(res, 404, { error: "Not found" });
+  const limit = isApply ? MAX_APPLY_BODY : MAX_BODY;
 
   let size = 0;
   const chunks = [];
   req.on("data", (c) => {
     size += c.length;
-    if (size > MAX_BODY) req.destroy();
+    if (size > limit) req.destroy();
     else chunks.push(c);
   });
   req.on("end", async () => {
@@ -239,6 +213,13 @@ const server = createServer((req, res) => {
     }
   });
 });
+
+for (const signal of ["SIGINT", "SIGTERM"]) {
+  process.on(signal, async () => {
+    await applier.close();
+    process.exit(0);
+  });
+}
 
 server.listen(PORT, "127.0.0.1", () => {
   console.log(`Jobtrail AI helper on http://127.0.0.1:${PORT} for ${[...ORIGINS].join(", ")}`);

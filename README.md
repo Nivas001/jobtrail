@@ -2,9 +2,9 @@
 
 # Jobtrail
 
-**A job application tracker that tells you which resume to send — and writes the cover letter.**
+**A job application tracker that tells you which resume to send, writes the cover letter, and fills in the application form.**
 
-Drag-and-drop pipeline · resume-to-job matching · AI cover letters · runs its AI on your own machine
+Drag-and-drop pipeline · resume-to-job matching · AI cover letters · form auto-fill · runs its AI on your own machine
 
 ![Next.js](https://img.shields.io/badge/Next.js_16-000?logo=nextdotjs&logoColor=white)
 ![React](https://img.shields.io/badge/React_19-149eca?logo=react&logoColor=white)
@@ -27,6 +27,7 @@ Job hunting with several versions of a resume gets messy fast: which one did I s
 - **Paste a link, get a filled form** — drop in a job URL or the posting text and AI extracts company, role, location, work mode and salary.
 - **Resume match** — compares *all* your resumes against the job, picks the best one, scores the fit (0–100), lists the keywords you have and the ones you're missing, and suggests concrete edits.
 - **Cover letters** — drafted from your real resume for the specific role, in the tone you pick. Edit, save and copy.
+- **Application auto-fill** — opens the company's Greenhouse, Lever or Ashby form in a browser window on your PC, attaches the right resume, fills your details and answers the questions from your resume. It stops before Submit: you review, fix what's flagged and send it yourself. When you submit, the card moves to Applied.
 - **Dashboard** — active applications, response rate, interviews, offers, applications per week, pipeline breakdown, follow-ups due and applications that have gone quiet.
 - **Resume library** — upload PDF versions (up to 4 MB each); text is extracted so AI can read them. Files live in a private bucket and are only served to you.
 - **Private by default** — GitHub sign-in with an allowlist; every row and file carries owner-only permissions.
@@ -40,6 +41,24 @@ Job hunting with several versions of a resume gets messy fast: which one did I s
 | --- | --- |
 | ![New application](docs/screenshots/new-application.png) | ![Resumes](docs/screenshots/resumes.png) |
 
+## Application auto-fill
+
+<img src="docs/screenshots/autofill.png" alt="Auto-fill panel" width="360" align="right">
+
+1. Fill in **Settings → Application profile** once (phone, links, notice period, work authorization, …).
+2. On an application with a job link, pick the resume and click **Open & fill the form**.
+3. The helper opens the form in its own Chromium window (separate profile, your normal browser is untouched) and:
+   - attaches the resume and waits until the site has really accepted it;
+   - fills standard fields (name, email, phone, links, location) straight from your profile;
+   - sends the remaining questions, with their options, to the AI, which answers only from your profile and resume;
+   - leaves blank anything it can't honestly answer, plus legal agreements (arbitration, non-competes), and highlights them;
+   - declines voluntary demographic questions and never ticks marketing opt-ins.
+4. You review the form and click **Submit** yourself. Jobtrail sees the confirmation page and marks the application as Applied.
+
+It never clicks Submit and never presses Enter on a form. Greenhouse, Lever and Ashby are supported, including Greenhouse forms embedded in company career pages; other sites get a best-effort pass. LinkedIn Easy Apply, Indeed and Naukri aren't supported: their terms forbid automation.
+
+<br clear="right">
+
 ## How the AI works
 
 ```
@@ -48,7 +67,7 @@ Browser (Jobtrail)  ──fetch──▶  helper on 127.0.0.1:4777  ──spawns
         └──────── structured JSON ◀──────┘
 ```
 
-`helper/server.mjs` is a ~250-line, dependency-free Node server that runs on your PC. It turns requests from the app into `agy --print --output-format json --json-schema …` calls, so every answer comes back as validated JSON. It:
+`helper/server.mjs` is a small Node server that runs on your PC (auto-fill in `helper/apply.mjs` uses `playwright-core` with your installed Chrome/Chromium). It turns requests from the app into `agy --print --output-format json --json-schema …` calls, so every answer comes back as validated JSON. It:
 
 - listens on `127.0.0.1` only, and answers only the origins listed in `JOBTRAIL_ORIGINS` (with the `Access-Control-Allow-Private-Network` header Chrome needs for https → localhost);
 - runs each call in an empty temporary workspace and asks the model not to use tools;
@@ -105,7 +124,7 @@ Open <http://localhost:3000>.
 
 ### 5. AI helper (optional)
 
-Requires the [Antigravity CLI](https://antigravity.google) (`agy`) signed in on the same machine.
+Requires the [Antigravity CLI](https://antigravity.google) (`agy`) signed in on the same machine, and Chrome or Chromium for auto-fill (set `JOBTRAIL_BROWSER` if it isn't found).
 
 ```bash
 mkdir -p ~/.config/jobtrail
@@ -133,9 +152,9 @@ src/
   lib/
     appwrite.ts       session + admin clients
     data.ts           server-side reads
-    ai-helper.ts      browser → local helper
+    ai-helper.ts      browser → local helper (AI tasks + auto-fill runs)
   proxy.ts            redirects signed-out visitors to /login
-helper/               local AI helper + systemd unit
+helper/               local AI helper: server.mjs, agy.mjs, apply.mjs (form auto-fill), systemd unit
 scripts/              setup-appwrite.mjs
 ```
 

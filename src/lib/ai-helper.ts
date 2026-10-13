@@ -72,3 +72,54 @@ export async function callHelper<T>(task: string, input: unknown): Promise<T> {
   if (!res.ok) throw new Error(body.error || `AI helper error ${res.status}`);
   return body.result as T;
 }
+
+// ---- auto-fill ---------------------------------------------------------------
+
+export type AutofillRun = {
+  id: string;
+  state: "filling" | "review" | "submitted" | "closed" | "error";
+  ats: "greenhouse" | "lever" | "ashby" | "other";
+  url: string;
+  steps: { at: number; text: string }[];
+  filled: { label: string; value: string }[];
+  needs: string[];
+  error: string | null;
+};
+
+async function helperJson<T>(path: string, init?: RequestInit): Promise<T> {
+  let res: Response;
+  try {
+    res = await fetch(`${HELPER_URL}${path}`, { ...LOOPBACK, ...init, signal: AbortSignal.timeout(30_000) });
+  } catch {
+    throw new Error("The AI helper isn't running on this PC");
+  }
+  const body = await res.json().catch(() => ({}));
+  if (res.status === 404 && path === "/apply") throw new Error("Restart the AI helper to get auto-fill");
+  if (!res.ok) throw new Error(body.error || `AI helper error ${res.status}`);
+  return body.result as T;
+}
+
+export function startAutofill(input: unknown) {
+  return helperJson<AutofillRun>("/apply", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(input),
+  });
+}
+
+export function autofillStatus(id: string) {
+  return helperJson<AutofillRun>(`/apply/${encodeURIComponent(id)}`);
+}
+
+export function detectAts(url: string | null): AutofillRun["ats"] | null {
+  if (!url) return null;
+  try {
+    const u = new URL(url);
+    if (/(^|\.)greenhouse\.io$/.test(u.hostname) || u.searchParams.has("gh_jid")) return "greenhouse";
+    if (/(^|\.)lever\.co$/.test(u.hostname)) return "lever";
+    if (/(^|\.)ashbyhq\.com$/.test(u.hostname)) return "ashby";
+    return "other";
+  } catch {
+    return null;
+  }
+}

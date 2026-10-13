@@ -3,9 +3,10 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, ExternalLink, MapPin } from "lucide-react";
 import { format } from "date-fns";
-import { getActivities, getApplication, getResumes, getUser } from "@/lib/data";
+import { getActivities, getApplication, getProfile, getResumes, getUser } from "@/lib/data";
 import { CompanyLogo } from "@/components/company-logo";
 import { AiMatchPanel, CoverLetterPanel } from "@/components/application/ai-panels";
+import { AutofillPanel } from "@/components/application/autofill-panel";
 import {
   ApplicationMenu,
   DetailsCard,
@@ -22,11 +23,12 @@ export async function generateMetadata(props: PageProps<"/applications/[id]">): 
 
 export default async function ApplicationPage(props: PageProps<"/applications/[id]">) {
   const { id } = await props.params;
-  const [user, app, resumes, activities] = await Promise.all([
+  const [user, app, resumes, activities, profile] = await Promise.all([
     getUser(),
     getApplication(id),
     getResumes(),
     getActivities(id, 50),
+    getProfile(),
   ]);
   if (!app) notFound();
 
@@ -76,6 +78,7 @@ export default async function ApplicationPage(props: PageProps<"/applications/[i
           <JobDescriptionCard key={`jd-${app.updated_at}`} app={app} />
         </div>
         <div className="space-y-4">
+          <AutofillPanel app={app} resumes={resumeLite} profile={profile} />
           <DetailsCard key={`d-${app.updated_at}`} app={app} resumes={resumes} />
           <TimelineCard app={app} activities={activities} />
         </div>

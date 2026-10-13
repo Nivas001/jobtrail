@@ -50,7 +50,11 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(`${origin}/login?error=not-allowed`);
   }
 
-  if (login) await users.updatePrefs({ userId, prefs: { login, avatar } }).catch(() => {});
+  if (login) {
+    // Merge: prefs also hold the application profile.
+    const prefs = await users.getPrefs({ userId }).catch(() => ({}));
+    await users.updatePrefs({ userId, prefs: { ...prefs, login, avatar } }).catch(() => {});
+  }
 
   const response = NextResponse.redirect(`${origin}/`);
   response.cookies.set(SESSION_COOKIE, session.secret, {

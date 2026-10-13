@@ -3,7 +3,7 @@ import { cache } from "react";
 import { redirect } from "next/navigation";
 import { Query, type Models } from "node-appwrite";
 import { DB_ID, TABLES, createSessionClient } from "@/lib/appwrite";
-import type { Activity, ActivityWithApp, AiMatch, Application, Resume } from "@/lib/types";
+import { PROFILE_KEYS, type Activity, type ActivityWithApp, type AiMatch, type Application, type Profile, type Resume } from "@/lib/types";
 
 export const getSession = cache(async () => {
   const session = await createSessionClient();
@@ -26,6 +26,20 @@ export async function getUser() {
     login: prefs.login ?? "",
     avatar: prefs.avatar ?? "",
   };
+}
+
+export async function getProfile(): Promise<Profile> {
+  const { user } = await getSession();
+  const saved = ((user.prefs as { profile?: Partial<Profile> }).profile ?? {}) as Partial<Profile>;
+  const [first = "", ...rest] = (user.name || "").trim().split(/\s+/);
+  const profile = Object.fromEntries(PROFILE_KEYS.map((k) => [k, saved[k] ?? ""])) as Profile;
+  // First visit: start from the GitHub account's name and email.
+  if (!saved.first_name && !saved.last_name) {
+    profile.first_name = first;
+    profile.last_name = rest.join(" ");
+  }
+  if (!saved.email) profile.email = user.email || "";
+  return profile;
 }
 
 const day = (v: unknown) => (typeof v === "string" && v ? v.slice(0, 10) : null);
