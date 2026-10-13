@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useFormStatus } from "react-dom";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { createClient } from "@/lib/supabase/client";
+import { signInWithGitHub } from "@/app/actions";
 
 function GitHubMark(props: React.SVGProps<SVGSVGElement>) {
   return (
@@ -14,23 +14,18 @@ function GitHubMark(props: React.SVGProps<SVGSVGElement>) {
 }
 
 export function GitHubButton() {
-  const [loading, setLoading] = useState(false);
   return (
-    <Button
-      size="lg"
-      className="h-11 w-full gap-2.5 text-[15px]"
-      disabled={loading}
-      onClick={async () => {
-        setLoading(true);
-        const supabase = createClient();
-        const { error } = await supabase.auth.signInWithOAuth({
-          provider: "github",
-          options: { redirectTo: `${window.location.origin}/auth/callback` },
-        });
-        if (error) setLoading(false);
-      }}
-    >
-      {loading ? <Loader2 className="size-4 animate-spin" /> : <GitHubMark className="size-[18px]" />}
+    <form action={signInWithGitHub}>
+      <SubmitButton />
+    </form>
+  );
+}
+
+function SubmitButton() {
+  const { pending } = useFormStatus();
+  return (
+    <Button type="submit" size="lg" className="h-11 w-full gap-2.5 text-[15px]" disabled={pending}>
+      {pending ? <Loader2 className="size-4 animate-spin" /> : <GitHubMark className="size-[18px]" />}
       Continue with GitHub
     </Button>
   );

@@ -1,63 +1,127 @@
 import "server-only";
 import { cache } from "react";
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
-import type { ActivityWithApp, Application, Resume } from "@/lib/types";
+import { Query, type Models } from "node-appwrite";
+import { DB_ID, TABLES, createSessionClient } from "@/lib/appwrite";
+import type { Activity, ActivityWithApp, AiMatch, Application, Resume } from "@/lib/types";
 
-export const getUser = cache(async () => {
-  const supabase = await createClient();
-  const { data } = await supabase.auth.getUser();
-  if (!data.user) redirect("/login");
-  const meta = data.user.user_metadata ?? {};
-  return {
-    id: data.user.id,
-    name: (meta.full_name as string) || (meta.user_name as string) || "You",
-    login: (meta.user_name as string) || "",
-    avatar: (meta.avatar_url as string) || "",
-  };
+export const getSession = cache(async () => {
+  const session = await createSessionClient();
+  if (!session) redirect("/login");
+  let user: Models.User<Models.Preferences>;
+  try {
+    user = await session.account.get();
+  } catch {
+    redirect("/login");
+  }
+  return { ...session, user };
 });
 
+export async function getUser() {
+  const { user } = await getSession();
+  const prefs = user.prefs as { login?: string; avatar?: string };
+  return {
+    id: user.$id,
+    name: user.name || prefs.login || "You",
+    login: prefs.login ?? "",
+    avatar: prefs.avatar ?? "",
+  };
+}
+
+const day = (v: unknown) => (typeof v === "string" && v ? v.slice(0, 10) : null);
+
+function parseMatch(v: unknown): AiMatch | null {
+  if (typeof v !== "string" || !v) return null;
+  try {
+    return JSON.parse(v) as AiMatch;
+  } catch {
+    return null;
+  }
+}
+
+export function toApplication(r: Models.DefaultRow): Application {
+  return {
+    id: r.$id,
+    company: r.company,
+    role: r.role,
+    status: r.status,
+    position: r.position ?? 0,
+    location: r.location ?? null,
+    work_mode: r.work_mode ?? null,
+    salary: r.salary ?? null,
+    job_url: r.job_url ?? null,
+    source: r.source ?? null,
+    job_description: r.job_description ?? null,
+    resume_id: r.resume_id ?? null,
+    applied_at: day(r.applied_at),
+    follow_up_at: day(r.follow_up_at),
+    notes: r.notes ?? null,
+    ai_match: parseMatch(r.ai_match),
+    cover_letter: r.cover_letter ?? null,
+    created_at: r.$createdAt,
+    updated_at: r.$updatedAt,
+  };
+}
+
+function toResume(r: Models.DefaultRow): Resume {
+  return {
+    id: r.$id,
+    name: r.name,
+    file_path: r.file_id ?? null,
+    content: r.content ?? "",
+    is_default: Boolean(r.is_default),
+    created_at: r.$createdAt,
+  };
+}
+
+function toActivity(r: Models.DefaultRow): Activity {
+  return { id: r.$id, application_id: r.application_id, kind: r.kind, title: r.title, created_at: r.$createdAt };
+}
+
 export async function getApplications(): Promise<Application[]> {
-  await getUser();
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("applications")
-    .select("*")
-    .order("position", { ascending: true })
-    .order("created_at", { ascending: false });
-  if (error) throw error;
-  return data as Application[];
+  const { tables } = await getSession();
+  const res = await tables.listRows({
+    databaseId: DB_ID,
+    tableId: TABLES.applications,
+    queries: [Query.orderAsc("position"), Query.limit(1000)],
+  });
+  return res.rows.map(toApplication);
 }
 
 export async function getApplication(id: string): Promise<Application | null> {
-  await getUser();
-  const supabase = await createClient();
-  const { data } = await supabase.from("applications").select("*").eq("id", id).maybeSingle();
-  return (data as Application) ?? null;
+  const { tables } = await getSession();
+  try {
+    return toApplication(await tables.getRow({ databaseId: DB_ID, tableId: TABLES.applications, rowId: id }));
+  } catch {
+    return null;
+  }
 }
 
 export async function getResumes(): Promise<Resume[]> {
-  await getUser();
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("resumes")
-    .select("*")
-    .order("is_default", { ascending: false })
-    .order("created_at", { ascending: false });
-  if (error) throw error;
-  return data as Resume[];
+  const { tables } = await getSession();
+  const res = await tables.listRows({
+    databaseId: DB_ID,
+    tableId: TABLES.resumes,
+    queries: [Query.orderDesc("is_default"), Query.orderDesc("$createdAt"), Query.limit(100)],
+  });
+  return res.rows.map(toResume);
 }
 
 export async function getActivities(applicationId?: string, limit = 12): Promise<ActivityWithApp[]> {
-  await getUser();
-  const supabase = await createClient();
-  let query = supabase
-    .from("activities")
-    .select("*, applications(company, role)")
-    .order("created_at", { ascending: false })
-    .limit(limit);
-  if (applicationId) query = query.eq("application_id", applicationId);
-  const { data, error } = await query;
-  if (error) throw error;
-  return data as ActivityWithApp[];
+  const { tables } = await getSession();
+  const queries = [Query.orderDesc("$createdAt"), Query.limit(limit)];
+  if (applicationId) queries.push(Query.equal("application_id", applicationId));
+  const res = await tables.listRows({ databaseId: DB_ID, tableId: TABLES.activities, queries });
+  const activities = res.rows.map(toActivity);
+
+  const ids = [...new Set(activities.map((a) => a.application_id))];
+  const apps = ids.length
+    ? await tables.listRows({
+        databaseId: DB_ID,
+        tableId: TABLES.applications,
+        queries: [Query.equal("$id", ids), Query.select(["$id", "company", "role"]), Query.limit(ids.length)],
+      })
+    : { rows: [] as Models.DefaultRow[] };
+  const byId = new Map(apps.rows.map((r) => [r.$id, { company: r.company as string, role: r.role as string }]));
+  return activities.map((a) => ({ ...a, applications: byId.get(a.application_id) ?? null }));
 }

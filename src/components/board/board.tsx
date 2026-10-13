@@ -174,6 +174,7 @@ export function Board({
       </div>
 
       <DndContext
+        id="jobtrail-board"
         sensors={sensors}
         collisionDetection={closestCorners}
         onDragStart={onDragStart}
@@ -213,7 +214,7 @@ function Column({
   return (
     <section
       className={cn(
-        "flex w-[272px] shrink-0 flex-col rounded-2xl border bg-card/40 transition-colors",
+        "flex w-[260px] min-w-[240px] shrink-0 flex-col rounded-2xl border bg-card/40 transition-colors xl:w-auto xl:flex-1 xl:shrink",
         isOver && "bg-card/80",
       )}
     >

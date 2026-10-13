@@ -4,7 +4,7 @@ import { useRef, useState, useTransition } from "react";
 import { formatDistanceToNowStrict } from "date-fns";
 import { Eye, FileText, Loader2, MoreHorizontal, Star, Trash2, UploadCloud } from "lucide-react";
 import { toast } from "sonner";
-import { deleteResume, getResumeUrl, setDefaultResume, uploadResume } from "@/app/actions";
+import { deleteResume, setDefaultResume, uploadResume } from "@/app/actions";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -88,13 +88,7 @@ export function ResumeList({ resumes }: { resumes: ResumeRow[] }) {
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
-                    <DropdownMenuItem
-                      onSelect={async () => {
-                        const res = await getResumeUrl(r.id);
-                        if (res.ok && res.data) window.open(res.data.url, "_blank");
-                        else toast.error("Couldn't open it");
-                      }}
-                    >
+                    <DropdownMenuItem onSelect={() => window.open(`/api/resumes/${r.id}`, "_blank")}>
                       <Eye className="size-4" /> Open PDF
                     </DropdownMenuItem>
                     {!r.is_default && (
