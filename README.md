@@ -117,7 +117,7 @@ To keep it running in the background on Linux, copy `helper/jobtrail-helper.serv
 
 ## Deploying
 
-Deploy to Vercel (or any Node host) with the same environment variables as `.env.local`. Then add the deployment's hostname as an Appwrite Web platform and to `JOBTRAIL_ORIGINS` in the helper's config, so AI works on the live site from your computer.
+Deploy to Vercel (or any Node host) with the same environment variables as `.env.local`. Then add the deployment's hostname as an Appwrite Web platform and to `JOBTRAIL_ORIGINS` in the helper's config, so AI works on the live site from your computer. The first time the live site reaches the helper, the browser asks to allow access to your local network. Choose **Allow**.
 
 ## Project structure
 

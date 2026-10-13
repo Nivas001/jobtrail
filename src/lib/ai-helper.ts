@@ -6,6 +6,10 @@ export const HELPER_URL = process.env.NEXT_PUBLIC_AI_HELPER_URL || "http://127.0
 
 export type HelperState = "checking" | "online" | "offline";
 
+// Chrome asks the user before a website may reach this computer ("Local Network
+// Access"). Naming the target lets it show that prompt instead of failing.
+const LOOPBACK = { targetAddressSpace: "loopback" } as RequestInit;
+
 // One shared health check for the whole page, however many components ask.
 // The helper only runs on the PC, so AI features light up only when it answers.
 let state: HelperState = "checking";
@@ -20,7 +24,7 @@ function set(next: HelperState) {
 
 async function check() {
   try {
-    const res = await fetch(`${HELPER_URL}/health`, { signal: AbortSignal.timeout(2500) });
+    const res = await fetch(`${HELPER_URL}/health`, { ...LOOPBACK, signal: AbortSignal.timeout(2500) });
     set(res.ok ? "online" : "offline");
   } catch {
     set("offline");
@@ -55,6 +59,7 @@ export async function callHelper<T>(task: string, input: unknown): Promise<T> {
   let res: Response;
   try {
     res = await fetch(`${HELPER_URL}/ai/${task}`, {
+      ...LOOPBACK,
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(input),

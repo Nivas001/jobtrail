@@ -46,6 +46,12 @@ export function HelperSetup({ origin }: { origin: string }) {
           </p>
           <Code>~/.config/jobtrail/helper.env → JOBTRAIL_ORIGINS</Code>
         </Step>
+        <Step n={4} title="Let this site reach your PC">
+          <p className="text-muted-foreground">
+            On the hosted site your browser asks once whether it may access apps or devices on your local network. Choose{" "}
+            <span className="text-foreground">Allow</span>. If you blocked it, re-enable it from the site settings next to the address bar.
+          </p>
+        </Step>
       </ol>
       <p className="text-xs text-muted-foreground">
         Nothing leaves your PC except the prompt the Antigravity CLI sends to Google. No API key is stored anywhere.
