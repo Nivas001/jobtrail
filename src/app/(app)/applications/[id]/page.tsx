@@ -32,7 +32,7 @@ export default async function ApplicationPage(props: PageProps<"/applications/[i
   ]);
   if (!app) notFound();
 
-  const resumeLite = resumes.map(({ id, name, content, is_default }) => ({ id, name, content, is_default }));
+  const resumeLite = resumes.map(({ id, name, content, is_default, created_at }) => ({ id, name, content, is_default, created_at }));
   const meta = [app.location, app.work_mode === "onsite" ? "On-site" : app.work_mode && app.work_mode[0].toUpperCase() + app.work_mode.slice(1), app.salary]
     .filter(Boolean)
     .join(" · ");

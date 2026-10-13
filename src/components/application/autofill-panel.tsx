@@ -4,15 +4,16 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { AlertCircle, Check, CircleCheck, Loader2, Send } from "lucide-react";
 import { toast } from "sonner";
-import { markAutoApplied } from "@/app/actions";
+import { markAutoApplied, updateApplication } from "@/app/actions";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { autofillStatus, detectAts, startAutofill, useHelper, type AutofillRun } from "@/lib/ai-helper";
-import type { Application, Resume } from "@/lib/types";
+import { autofillStatus, callHelper, detectAts, startAutofill, useHelper, type AutofillRun } from "@/lib/ai-helper";
+import { isMatchCurrent, matchResumes, type ResumeLite } from "@/lib/match";
+import type { Application } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
-type ResumeLite = Pick<Resume, "id" | "name" | "content" | "is_default">;
+const AUTO = "auto";
 
 const ATS_LABEL = { greenhouse: "Greenhouse", lever: "Lever", ashby: "Ashby", other: "this site" } as const;
 const FINISHED: AutofillRun["state"][] = ["submitted", "closed", "error"];
@@ -37,13 +38,11 @@ export function AutofillPanel({
 }) {
   const helper = useHelper();
   const ats = detectAts(app.job_url);
-  const preferred =
-    resumes.find((r) => r.id === app.ai_match?.best_resume_id) ??
-    resumes.find((r) => r.id === app.resume_id) ??
-    resumes.find((r) => r.is_default) ??
-    resumes[0];
-  const [resumeId, setResumeId] = useState(preferred?.id ?? "");
+  const fallback = resumes.find((r) => r.is_default) ?? resumes[0];
+  // With several resumes the AI picks; with one there's nothing to choose.
+  const [resumeId, setResumeId] = useState(resumes.length > 1 ? AUTO : (fallback?.id ?? ""));
   const [starting, setStarting] = useState(false);
+  const [prep, setPrep] = useState<string[]>([]);
   const [run, setRun] = useState<AutofillRun | null>(null);
   const recorded = useRef(false);
   const sentResume = useRef("");
@@ -82,20 +81,53 @@ export function AutofillPanel({
     });
   }, [run?.state, run?.ats, app.id]);
 
+  // Pick the resume that fits this job: a current saved match, else a fresh AI match.
+  async function pickResume(note: (s: string) => void): Promise<{ resume: ResumeLite; description: string }> {
+    let description = app.job_description?.trim() ?? "";
+    if (resumeId !== AUTO) return { resume: resumes.find((r) => r.id === resumeId)!, description };
+    if (isMatchCurrent(app.ai_match, resumes)) {
+      const best = resumes.find((r) => r.id === app.ai_match!.best_resume_id)!;
+      note(`Best match: ${best.name} (${Math.round(app.ai_match.score)}%)`);
+      return { resume: best, description };
+    }
+    if (!description && app.job_url) {
+      note("Reading the job posting");
+      try {
+        const posting = await callHelper<{ description: string }>("fetchPosting", { url: app.job_url });
+        description = posting.description?.trim() ?? "";
+        if (description) await updateApplication(app.id, { job_description: description });
+      } catch {
+        // Some postings need a login; fall back below.
+      }
+    }
+    if (!description) {
+      note(`No job description to compare with; using ${fallback.name}`);
+      return { resume: fallback, description };
+    }
+    note(`Comparing your ${resumes.length} resumes with the job`);
+    const match = await matchResumes(app, description, resumes);
+    const best = resumes.find((r) => r.id === match.best_resume_id) ?? fallback;
+    note(`Best match: ${best.name} (${Math.round(match.score)}%)`);
+    return { resume: best, description };
+  }
+
   async function start() {
-    const resume = resumes.find((r) => r.id === resumeId);
-    if (!resume || !app.job_url) return;
+    if (!app.job_url || resumes.length === 0) return;
     setStarting(true);
+    setRun(null);
+    setPrep([]);
     recorded.current = false;
-    sentResume.current = resume.id;
+    const note = (s: string) => setPrep((p) => [...p, s]);
     try {
+      const { resume, description } = await pickResume(note);
+      sentResume.current = resume.id;
       const started = await startAutofill({
         url: app.job_url,
         profile,
         resume: { name: `${resume.name.replace(/\.pdf$/i, "")}.pdf`, base64: await pdfBase64(resume.id) },
         resumeText: resume.content,
         coverLetter: app.cover_letter ?? "",
-        job: { company: app.company, role: app.role, description: app.job_description ?? "" },
+        job: { company: app.company, role: app.role, description },
       });
       setRun(started);
     } catch (e) {
@@ -143,10 +175,11 @@ export function AutofillPanel({
               <SelectValue placeholder="Resume" />
             </SelectTrigger>
             <SelectContent>
+              {resumes.length > 1 && <SelectItem value={AUTO}>Best match for this job (AI picks)</SelectItem>}
               {resumes.map((r) => (
                 <SelectItem key={r.id} value={r.id}>
                   {r.name}
-                  {r.id === app.ai_match?.best_resume_id ? " · best match" : ""}
+                  {isMatchCurrent(app.ai_match, resumes) && r.id === app.ai_match.best_resume_id ? " · best match" : ""}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -163,6 +196,23 @@ export function AutofillPanel({
           {busy ? "Filling…" : run ? "Fill again" : "Open & fill the form"}
         </Button>
 
+        {prep.length > 0 && (
+          <ol className="space-y-1.5 pt-1 text-sm">
+            {prep.map((s, i) => {
+              const current = starting && !run && i === prep.length - 1;
+              return (
+                <li key={i} className="flex items-start gap-2">
+                  {current ? (
+                    <Loader2 className="mt-0.5 size-3.5 shrink-0 animate-spin text-primary" />
+                  ) : (
+                    <Check className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
+                  )}
+                  <span className={cn(current || s.startsWith("Best match") ? "text-foreground" : "text-muted-foreground")}>{s}</span>
+                </li>
+              );
+            })}
+          </ol>
+        )}
         {run && <RunProgress run={run} />}
       </CardContent>
     </Card>

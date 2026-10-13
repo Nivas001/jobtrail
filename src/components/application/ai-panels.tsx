@@ -3,16 +3,15 @@
 import { useState, useTransition } from "react";
 import { Check, Copy, FileText, Loader2, RefreshCw, Sparkles, Wand2 } from "lucide-react";
 import { toast } from "sonner";
-import { saveAiMatch, saveCoverLetter } from "@/app/actions";
+import { saveCoverLetter } from "@/app/actions";
 import { Button } from "@/components/ui/button";
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { callHelper, useHelper, type HelperState } from "@/lib/ai-helper";
-import type { AiMatch, Application, Resume } from "@/lib/types";
+import { matchResumes, type ResumeLite } from "@/lib/match";
+import type { AiMatch, Application } from "@/lib/types";
 import { cn } from "@/lib/utils";
-
-type ResumeLite = Pick<Resume, "id" | "name" | "content" | "is_default">;
 
 function HelperHint({ state, needsJd }: { state: HelperState; needsJd: boolean }) {
   if (needsJd) return <p className="text-xs text-muted-foreground">Add the job description first.</p>;
@@ -67,23 +66,7 @@ export function AiMatchPanel({ app, resumes }: { app: Application; resumes: Resu
     }
     setRunning(true);
     try {
-      const result = await callHelper<Omit<AiMatch, "analyzed_at">>("match", {
-        jobDescription: app.job_description,
-        company: app.company,
-        role: app.role,
-        resumes: resumes.map((r) => ({ id: r.id, name: r.name, text: r.content })),
-      });
-      const known = resumes.find((r) => r.id === result.best_resume_id);
-      const next: AiMatch = {
-        ...result,
-        score: Math.max(0, Math.min(100, result.score)),
-        best_resume_id: known?.id ?? null,
-        best_resume_name: known?.name ?? result.best_resume_name,
-        analyzed_at: new Date().toISOString(),
-      };
-      setMatch(next);
-      const saved = await saveAiMatch(app.id, next);
-      if (!saved.ok) toast.error("Couldn't save the analysis", { description: saved.error });
+      setMatch(await matchResumes(app, app.job_description ?? "", resumes));
     } catch (e) {
       toast.error("Analysis failed", { description: (e as Error).message });
     } finally {

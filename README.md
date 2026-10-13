@@ -46,7 +46,7 @@ Job hunting with several versions of a resume gets messy fast: which one did I s
 <img src="docs/screenshots/autofill.png" alt="Auto-fill panel" width="360" align="right">
 
 1. Fill in **Settings → Application profile** once (phone, links, notice period, work authorization, …).
-2. On an application with a job link, pick the resume and click **Open & fill the form**.
+2. On an application with a job link, click **Open & fill the form**. With several resumes the default is **Best match for this job**: the AI reads the posting (fetching it if you didn't paste it), compares all your resumes with it and attaches the one that fits best. The analysis is saved to the application's Resume match card. You can also pick a resume yourself.
 3. The helper opens the form in its own Chromium window (separate profile, your normal browser is untouched) and:
    - attaches the resume and waits until the site has really accepted it;
    - fills standard fields (name, email, phone, links, location) straight from your profile;
