@@ -239,12 +239,14 @@ export async function saveCoverLetter(id: string, text: string): Promise<ActionR
 
 // ---- resumes ---------------------------------------------------------------
 
+const MAX_RESUME_BYTES = 4_000_000;
+
 export async function uploadResume(formData: FormData): Promise<ActionResult> {
   const file = formData.get("file");
   const name = String(formData.get("name") ?? "").trim();
   if (!(file instanceof File) || file.size === 0) return { ok: false, error: "Choose a PDF file" };
   if (file.type !== "application/pdf") return { ok: false, error: "Only PDF resumes are supported" };
-  if (file.size > 5_000_000) return { ok: false, error: "PDF is larger than 5 MB" };
+  if (file.size > MAX_RESUME_BYTES) return { ok: false, error: "PDF is larger than 4 MB" };
 
   const s = await authed();
   const bytes = new Uint8Array(await file.arrayBuffer());
@@ -318,7 +320,19 @@ export async function deleteResume(id: string): Promise<ActionResult> {
     const row = await s.tables.getRow({ databaseId: DB_ID, tableId: TABLES.resumes, rowId: id });
     if (row.file_id) await s.storage.deleteFile({ bucketId: RESUME_BUCKET, fileId: row.file_id }).catch(() => {});
     await s.tables.deleteRow({ databaseId: DB_ID, tableId: TABLES.resumes, rowId: id });
+    // Applications that were sent with it now point at nothing; clear them.
+    const using = await s.tables.listRows({
+      databaseId: DB_ID,
+      tableId: TABLES.applications,
+      queries: [Query.equal("resume_id", id), Query.select(["$id"]), Query.limit(1000)],
+    });
+    await Promise.all(
+      using.rows.map((r) =>
+        s.tables.updateRow({ databaseId: DB_ID, tableId: TABLES.applications, rowId: r.$id, data: { resume_id: null } }),
+      ),
+    );
     revalidatePath("/resumes");
+    refreshAll();
     return { ok: true };
   } catch (e) {
     return { ok: false, error: errorMessage(e) };

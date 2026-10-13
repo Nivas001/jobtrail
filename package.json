@@ -44,5 +44,7 @@
     "typescript": "^5"
   },
   "packageManager": "pnpm@12.11.2",
-  "description": "Job application tracker with a drag-and-drop board, resume matching and AI cover letters powered by a local Antigravity CLI helper."
+  "description": "Job application tracker with a drag-and-drop board, resume matching and AI cover letters powered by a local Antigravity CLI helper.",
+  "license": "MIT",
+  "author": "Srinivas M (https://nivas.tech)"
 }

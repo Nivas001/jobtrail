@@ -364,7 +364,7 @@ export function TimelineCard({ app, activities }: { app: Application; activities
             <li key={a.id} className="relative">
               <span className={cn("absolute top-1.5 -left-[25px] size-2 rounded-full ring-4 ring-card", KIND_COLOR[a.kind] ?? "bg-zinc-400")} />
               <p className={cn("text-sm", a.kind === "note" ? "whitespace-pre-wrap" : "text-foreground/90")}>{a.title}</p>
-              <p className="text-xs text-muted-foreground">
+              <p className="text-xs text-muted-foreground" suppressHydrationWarning>
                 {formatDistanceToNowStrict(new Date(a.created_at), { addSuffix: true })}
               </p>
             </li>

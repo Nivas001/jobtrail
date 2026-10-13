@@ -1,18 +1,20 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   DndContext,
   DragOverlay,
   KeyboardSensor,
   PointerSensor,
-  closestCorners,
+  pointerWithin,
+  rectIntersection,
   useDroppable,
   useSensor,
   useSensors,
   type DragEndEvent,
   type DragOverEvent,
+  type CollisionDetection,
   type DragStartEvent,
 } from "@dnd-kit/core";
 import {
@@ -42,6 +44,15 @@ function group(apps: Application[]): Columns {
   return cols;
 }
 
+// Whatever is under the pointer wins; a card beats the column it sits in.
+// (closestCorners misreads tall, empty columns and drops land nowhere.)
+const collision: CollisionDetection = (args) => {
+  const within = pointerWithin(args);
+  const hits = within.length ? within : rectIntersection(args);
+  const cards = hits.filter((h) => !(STATUSES as readonly string[]).includes(String(h.id)));
+  return cards.length ? [cards[0]] : hits.slice(0, 1);
+};
+
 function findColumn(cols: Columns, id: string): Status | undefined {
   if ((STATUSES as readonly string[]).includes(id)) return id as Status;
   return STATUSES.find((s) => cols[s].some((a) => a.id === id));
@@ -59,6 +70,11 @@ export function Board({
   const [activeId, setActiveId] = useState<string | null>(null);
   const [startCol, setStartCol] = useState<Status | null>(null);
   const [query, setQuery] = useState("");
+  // A drop can be followed by a click on the card underneath; ignore it.
+  const lastDragEnd = useRef(0);
+  const open = (id: string) => {
+    if (Date.now() - lastDragEnd.current > 250) router.push(`/applications/${id}`);
+  };
 
   // Server data changed (e.g. after an action): take it unless mid-drag.
   const [seenApps, setSeenApps] = useState(apps);
@@ -115,6 +131,7 @@ export function Board({
     const { active, over } = e;
     const id = String(active.id);
     setActiveId(null);
+    lastDragEnd.current = Date.now();
     if (!over) {
       setCols(group(apps));
       return;
@@ -176,7 +193,7 @@ export function Board({
       <DndContext
         id="jobtrail-board"
         sensors={sensors}
-        collisionDetection={closestCorners}
+        collisionDetection={collision}
         onDragStart={onDragStart}
         onDragOver={onDragOver}
         onDragEnd={onDragEnd}
@@ -187,7 +204,7 @@ export function Board({
       >
         <div className="flex flex-1 gap-3 overflow-x-auto px-4 pb-6 scrollbar-thin sm:px-6 lg:px-8">
           {STATUSES.map((status) => (
-            <Column key={status} status={status} items={filtered[status]} resumes={resumes} onOpen={(id) => router.push(`/applications/${id}`)} />
+            <Column key={status} status={status} items={filtered[status]} resumes={resumes} onOpen={open} />
           ))}
         </div>
         <DragOverlay dropAnimation={{ duration: 180, easing: "cubic-bezier(0.2, 0, 0, 1)" }}>
@@ -315,7 +332,7 @@ function CardBody({ app, dragging }: { app: Application; dragging?: boolean }) {
             {followDays < 0 ? "Overdue" : followDays === 0 ? "Today" : `${followDays}d`}
           </span>
         )}
-        <span className="ml-auto text-[11px] text-muted-foreground">
+        <span className="ml-auto text-[11px] text-muted-foreground" suppressHydrationWarning>
           {formatDistanceToNowStrict(new Date(app.updated_at), { addSuffix: false })}
         </span>
       </div>

@@ -29,6 +29,10 @@ export function ResumeList({ resumes }: { resumes: ResumeRow[] }) {
     if (!files?.length) return;
     setUploading(true);
     for (const file of Array.from(files)) {
+      if (file.size > 4_000_000) {
+        toast.error(`${file.name} is larger than 4 MB`);
+        continue;
+      }
       const fd = new FormData();
       fd.set("file", file);
       const res = await uploadResume(fd);
@@ -77,7 +81,7 @@ export function ResumeList({ resumes }: { resumes: ResumeRow[] }) {
                 </span>
                 <div className="min-w-0 flex-1">
                   <p className="line-clamp-2 font-medium leading-snug">{r.name}</p>
-                  <p className="mt-0.5 text-xs text-muted-foreground">
+                  <p className="mt-0.5 text-xs text-muted-foreground" suppressHydrationWarning>
                     {formatDistanceToNowStrict(new Date(r.created_at), { addSuffix: true })} · {r.content.split(/\s+/).filter(Boolean).length} words
                   </p>
                 </div>

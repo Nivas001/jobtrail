@@ -11,6 +11,7 @@ Drag-and-drop pipeline · resume-to-job matching · AI cover letters · runs its
 ![TypeScript](https://img.shields.io/badge/TypeScript-3178c6?logo=typescript&logoColor=white)
 ![Tailwind CSS](https://img.shields.io/badge/Tailwind_4-0ea5e9?logo=tailwindcss&logoColor=white)
 ![Appwrite](https://img.shields.io/badge/Appwrite-fd366e?logo=appwrite&logoColor=white)
+![License: MIT](https://img.shields.io/badge/License-MIT-f59e0b)
 
 ![Jobtrail dashboard](docs/screenshots/dashboard.png)
 
@@ -27,7 +28,7 @@ Job hunting with several versions of a resume gets messy fast: which one did I s
 - **Resume match** — compares *all* your resumes against the job, picks the best one, scores the fit (0–100), lists the keywords you have and the ones you're missing, and suggests concrete edits.
 - **Cover letters** — drafted from your real resume for the specific role, in the tone you pick. Edit, save and copy.
 - **Dashboard** — active applications, response rate, interviews, offers, applications per week, pipeline breakdown, follow-ups due and applications that have gone quiet.
-- **Resume library** — upload PDF versions; text is extracted so AI can read them. Files live in a private bucket and are only served to you.
+- **Resume library** — upload PDF versions (up to 4 MB each); text is extracted so AI can read them. Files live in a private bucket and are only served to you.
 - **Private by default** — GitHub sign-in with an allowlist; every row and file carries owner-only permissions.
 - Dark, keyboard-friendly UI that works on phones too.
 
@@ -137,6 +138,10 @@ src/
 helper/               local AI helper + systemd unit
 scripts/              setup-appwrite.mjs
 ```
+
+## License
+
+[MIT](LICENSE) © 2026 Srinivas M
 
 ---
 

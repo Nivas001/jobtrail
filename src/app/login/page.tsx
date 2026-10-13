@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
+import { redirect } from "next/navigation";
 import { Briefcase, FileText, Sparkles } from "lucide-react";
 import { Logo } from "@/components/logo";
+import { createSessionClient } from "@/lib/appwrite";
 import { GitHubButton } from "./github-button";
 
 export const metadata: Metadata = { title: "Sign in" };
@@ -19,7 +21,19 @@ const FEATURES = [
   { icon: FileText, title: "Cover letters in seconds", text: "Drafted from your real experience." },
 ];
 
+async function isSignedIn() {
+  const session = await createSessionClient();
+  if (!session) return false;
+  try {
+    await session.account.get();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export default async function LoginPage(props: PageProps<"/login">) {
+  if (await isSignedIn()) redirect("/");
   const { error } = await props.searchParams;
   const message = typeof error === "string" ? ERRORS[error] : undefined;
   return (
