@@ -9,6 +9,8 @@ const ERRORS: Record<string, string> = {
   "not-allowed": "That GitHub account isn't allowed to use this tracker.",
   auth: "Sign-in didn't complete. Please try again.",
   "missing-code": "Sign-in didn't complete. Please try again.",
+  "provider-off": "GitHub sign-in is switched off in Appwrite (Auth → Settings → GitHub).",
+  start: "Couldn't start sign-in. Check that this site's hostname is a Web platform in Appwrite.",
 };
 
 const FEATURES = [

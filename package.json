@@ -6,7 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "setup:appwrite": "node --env-file=.env.local scripts/setup-appwrite.mjs",
+    "helper": "node helper/server.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
@@ -41,5 +43,6 @@
     "tailwindcss": "^4",
     "typescript": "^5"
   },
-  "packageManager": "pnpm@12.11.2"
+  "packageManager": "pnpm@12.11.2",
+  "description": "Job application tracker with a drag-and-drop board, resume matching and AI cover letters powered by a local Antigravity CLI helper."
 }

@@ -333,12 +333,20 @@ export async function signInWithGitHub() {
   const proto = h.get("x-forwarded-proto") ?? (host?.startsWith("localhost") ? "http" : "https");
   const origin = `${proto}://${host}`;
   const { account } = createAdminClient();
-  const url = await account.createOAuth2Token({
-    provider: OAuthProvider.Github,
-    success: `${origin}/auth/callback`,
-    failure: `${origin}/login?error=auth`,
-    scopes: ["read:user", "user:email"],
-  });
+  let url: string;
+  try {
+    url = await account.createOAuth2Token({
+      provider: OAuthProvider.Github,
+      success: `${origin}/auth/callback`,
+      failure: `${origin}/login?error=auth`,
+      scopes: ["read:user", "user:email"],
+    });
+  } catch (e) {
+    // 412 = GitHub provider switched off in Appwrite; otherwise usually the
+    // site's hostname is missing from the project's Web platforms.
+    const code = (e as { code?: number }).code;
+    redirect(`/login?error=${code === 412 ? "provider-off" : "start"}`);
+  }
   redirect(url);
 }
 

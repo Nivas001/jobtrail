@@ -1,0 +1,15 @@
+# systemd user service for the Jobtrail AI helper.
+# Copy to ~/.config/systemd/user/, fix the two paths, then:
+#   systemctl --user daemon-reload && systemctl --user enable --now jobtrail-helper
+[Unit]
+Description=Jobtrail AI helper (Antigravity CLI bridge on 127.0.0.1:4777)
+After=default.target
+
+[Service]
+EnvironmentFile=%h/.config/jobtrail/helper.env
+ExecStart=/usr/bin/env node %h/path/to/jobtrail/helper/server.mjs
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=default.target
